@@ -5,7 +5,6 @@ Webscrape annual snowfall from Alta's webage
 # Imports
 import requests
 import bs4
-from bs4 import BeautifulSoup
 import pandas as pd
 import os
 from datetime import datetime
@@ -15,8 +14,9 @@ from datetime import datetime
 curr_season = [2019, 2020]
 past_seasons = 16
 
-
 # Set up Alta's webpage
+url = 'https://www.alta.com/conditions/weather-observations/snowfall-history'
+
 headers = {'Accept': '*/*',
            'Accept-Encoding': 'gzip, deflate, br',
            'Accept-Language': 'en-US,en;q=0.9',
@@ -32,7 +32,6 @@ headers = {'Accept': '*/*',
            'Sec-Fetch-Site': 'same-origin',
            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.97 Safari/537.36',
            'X-Requested-With': 'XMLHttpRequest'}
-url = 'https://www.alta.com/conditions/weather-observations/snowfall-history'
 
 # Pull current years data
 curr_year = "".join(str(x) for x in curr_season)
@@ -40,7 +39,7 @@ form_data = {'_token': '4e15d76f7dfb5a321d20e9b6f6597921', 'season': curr_year}
 response = requests.post(url, data=form_data, headers=headers)
 
 # Get table headers
-soup = BeautifulSoup(response.text, 'lxml')
+soup = bs4.BeautifulSoup(response.text, 'lxml')
 snowfall_table = soup.find('table', {'class': 'table table-striped'})
 table_headers = []
 for th in snowfall_table.find_all('th'):
@@ -48,25 +47,27 @@ for th in snowfall_table.find_all('th'):
     if th_str not in table_headers:
         table_headers.append(th_str)
 
-# Loop through all desired seasons and append to dataframe
+# Loop through all desired seasons, scrape data, and append to dataframe
 df = pd.DataFrame(columns=['season'] + table_headers)
 for i in range(past_seasons):
 
     season = "-".join(str(x - i) for x in curr_season)
-    form_data = {'_token': '4e15d76f7dfb5a321d20e9b6f6597921', 'season': season.replace("-", "")}
+    form_data = {'_token': "4e15d76f7dfb5a321d20e9b6f6597921", 'season': season.replace("-", "")}
     response = requests.post(url, data=form_data, headers=headers)
-    soup = BeautifulSoup(response.text, 'lxml')
+    soup = bs4.BeautifulSoup(response.text, 'lxml')
     snowfall_table = soup.find('table', {'class': 'table table-striped'})
     all_data_rows = snowfall_table.find('tbody').find_all('tr')
+
+    print("Parsing Season: {}, {} Days with data".format(season, len(all_data_rows)))
 
     for row in all_data_rows:
         df.loc[len(df)] = [season] + [x.contents[0].strip() for x in row.find_all('td')]
 
 # Remove "Trace" or "Trac" of "NA" rows
 for th in table_headers[1:]:
-    df = df[df[th] != 'Trace']
-    df = df[df[th] != 'Trac']
-    df = df[df[th] != 'N/A']
+    df = df[df[th] != "Trace"]
+    df = df[df[th] != "Trac"]
+    df = df[df[th] != "N/A"]
 
 # Convert data to datetime and floats
 df[table_headers[0]] = df[table_headers[0]].apply(lambda x: datetime.strptime(x, '%Y-%m-%d'))
@@ -75,4 +76,3 @@ for th in table_headers[1:]:
 
 file_path = os.path.abspath(os.path.join(os.getcwd(), "..", "..", "data", "raw", "alta_snowfall.csv"))
 df.to_csv(file_path, index=False)
-

@@ -7,15 +7,15 @@ Sphinx
 coverage
 flake8
 requests
-beautifulsoup4
-pandas
+beautifulsoup4==4.8.1
+pandas==0.25.3
+seaborn==0.9.0
+bokeh==1.4.0
 jupyterthemes
-jupyter==1.0.0
-jupyterlab==1.1.4
-# conda install -c conda-forge jupyter_contrib_nbextensions -y
-# jupyter contrib nbextension install --user
-# conda install -c conda-forge jupyter_nbextensions_configurator -y
+jupyter>=1.0.0
+jupyterlab>=1.1.4
 
 # external requirements - pip
 awscli
 python-dotenv>=0.5.1
+chart_studio==1.0.0
