@@ -16,12 +16,12 @@ COL_WIDTH = 0.8
 COL_GAP = 0.05
 
 
-def make_data_set(sites, season, day_of_week, adu_df):
+def make_data_set(season, sites, day_of_week, adu_df):
     """
-    Set the data based on site, day of week, and seasons selected. Then sort based on
+    Set the data based on season, sites, and day of week selected. Then sort based on
     season then month
     """
-    return adu_df.query("site in @sites and dayOfWeek == @day_of_week and season == @season").sort_values(['month'])
+    return adu_df.query("season == @season and site in @sites and dayOfWeek == @day_of_week").sort_values(['month'])
 
 
 def init_figure():
