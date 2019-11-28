@@ -1,0 +1,5 @@
+Plots to generate
+-----------------
+* daily user averages per site/season/location --- DONE
+* daily user number per site per season (consider location overlay)
+* daily user number per site vs. Alta snowfall (LCC sites only)
