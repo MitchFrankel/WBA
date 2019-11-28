@@ -2,141 +2,61 @@
 This module provides functions for generating bokeh plots for daily user figures
 """
 
+from datetime import datetime
+import os
+import pandas as pd
 import numpy as np
-from bokeh.models import ColumnDataSource, FactorRange, HoverTool, Range1d, Title, LabelSet
-from bokeh.plotting import figure
-from bokeh.transform import dodge
+
+file_path = os.path.abspath(os.path.join(os.getcwd(), "..", "..", "data", "raw", "TRAFx_raw.csv"))
+trafx_df = pd.read_csv(file_path)
+trafx_df['Day'] = trafx_df['Day'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d'))
+trafx_df.replace(np.nan, 0, inplace=True)
+
+file_path = os.path.abspath(os.path.join(os.getcwd(), "..", "..", "data", "raw", "alta_snowfall.csv"))
+alta_df = pd.read_csv(file_path)
+alta_df['Report Date'] = alta_df['Report Date'].apply(lambda x: datetime.strptime(x, '%Y-%m-%d'))
+alta_df['Day'] = alta_df['Report Date']
 
 
-# GLobals
-PLOT_COLORS = ('#0EBFE9', '#0BB5FF', '#009ACD', '#00688B', '#0D4F8B')  # Base colors - blues in increasing darkness
-MONTHS = ("Dec", "Jan", "Feb", "Mar", "Apr")
-ALL_DOW = ("All", "Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday")
-COL_WIDTH = 0.8
-COL_GAP = 0.05
+def make_data_set(trafx_df, alta_df, season, site):
+    # Set start/end date
+    start_date = datetime.strptime("{}-12-01".format(season.split("-")[0]), '%Y-%m-%d')
+    end_date = datetime.strptime("{}-04-30".format(season.split("-")[1]), '%Y-%m-%d')
 
+    # Only keep Day and site
+    tmp_trafx_df = trafx_df[['Day', site]]
 
-def make_data_set(season, sites, day_of_week, adu_df):
-    """
-    Set the data based on season, sites, and day of week selected. Then sort based on
-    season then month
-    """
-    return adu_df.query("season == @season and site in @sites and dayOfWeek == @day_of_week").sort_values(['month'])
+    # Loop through all possible dates and get data
+    df = pd.DataFrame(columns=['date', 'users', 'new_snow', 'cum_snow', 'storm_total'])
+    last_cum_snow = 0
+    for day in pd.date_range(start_date, end_date):
 
+        # trafx data
+        users = 0 if tmp_trafx_df.query("Day == @day").empty else tmp_trafx_df.query("Day == @day")[site].values[0]
 
-def init_figure():
-    return figure(x_range=FactorRange(*MONTHS), y_range=(0, 100), plot_height=400,
-                  plot_width=800, toolbar_location='right', tools="save", title="")
-
-
-def style_plot(p):
-    """
-    Stylize the plot
-    """
-    # Title
-    p.title.text_font_size = '12pt'
-    p.title.text_font_style = 'bold'
-
-    # x-axis modifications
-    p.x_range.range_padding = 0.1
-    p.xgrid.grid_line_color = None
-    p.xaxis.major_tick_line_color = None  # turn off x-axis major ticks
-    p.xaxis.minor_tick_line_color = None  # turn off x-axis minor ticks
-    p.xaxis.major_label_orientation = 0
-    p.xaxis.major_label_text_font_size = '12pt'
-    p.xaxis.major_label_text_font_style = 'bold'
-    p.xaxis.major_label_standoff = 10
-
-    # y-axis modifications
-    p.y_range.start = 0
-    p.yaxis.minor_tick_line_color = None
-    p.yaxis.major_label_text_font_size = '12pt'
-    p.yaxis.major_label_text_font_style = 'bold'
-
-    # legend
-    p.legend.location = "top_left"
-    p.legend.orientation = "horizontal"
-
-    return p
-
-
-def set_title_str(season, day_of_week):
-    """
-    Generate title string for plot
-    """
-    dow_str = 'Per Month' if day_of_week == 'All' else "Per Month For {}s".format(day_of_week.title())
-    return "Season {} | Average Daily Trailhead Users {}".format(season, dow_str)
-
-
-def set_col_width_offset(n_sites):
-    """
-    Determine column widths and offsets based on seasons [brute force cause I can't think at the moment]
-    """
-    width = COL_WIDTH / n_sites
-    if n_sites == 1:
-        offsets = [0]
-    else:
-        gap = COL_GAP / (n_sites-1)
-        ixs = list(range(-(n_sites//2), n_sites//2 + 1))
-        if n_sites % 2 == 0:
-            ixs.remove(0)
-            offsets = [(gap + width) * (i - np.sign(i)/2) for i in ixs]
+        # alta data
+        if alta_df.query("Day == @day").empty:
+            alta_data = [0, last_cum_snow, 0]
         else:
-            offsets = [(gap + width) * i for i in ixs]
+            alta_data = alta_df.query("Day == @day")[['24 Hr New Snow',
+                                                      'Storm Total', 'Cumulative Season Snow']].values[0]
+            last_cum_snow = alta_df.query("Day == @day")['Cumulative Season Snow'].values[0]
 
-    return width, offsets
+        df.loc[len(df)] = [day, users] + list(alta_data)
+
+    return df
 
 
-def make_plot(src_df, p=None, show_sensor_n=False):
-    """
-    Generate the bokeh plot based on specific data
-    """
+df = make_data_set(trafx_df, alta_df, '2018-2019', 'LCC Our Lady')
+df.head(5)
 
-    # If base figure does not exist, create now
-    if p is None:
-        p = init_figure()
 
-    # Determine how many sites there are, then column width/offsets
-    sites = sorted(src_df['site'].unique())
-    n_sites = len(sites)
-    width, offsets = set_col_width_offset(n_sites)
 
-    # Add bar plot for each site
-    for offset, site, color in zip(offsets, sites, PLOT_COLORS[0:len(offsets)]):
-        temp_df = src_df.query("site == @site")
-        adu = [0 if temp_df[temp_df['month'] == month].empty
-               else temp_df[temp_df['month'] == month]['adu'].values[0]
-               for month in MONTHS]
 
-        p.vbar(x=dodge('x', offset, range=p.x_range), top='counts', width=width,
-               source=ColumnDataSource(data=dict(x=MONTHS, counts=adu)),
-               fill_alpha=0.9, hover_fill_alpha=1.0, legend_label=site, name=site, color=color)
 
-        # Add n days of data labels
-        n_days_data = ["" if temp_df[temp_df['month'] == month].empty
-                       else "({})".format(temp_df[temp_df['month'] == month]['n'].values[0])
-                       for month in MONTHS]
 
-        if show_sensor_n:
-            labels = LabelSet(x=dodge('x', offset, range=p.x_range), y='y', text='n', level='glyph', y_offset=0,
-                              source=ColumnDataSource(data=dict(x=MONTHS, y=adu, n=n_days_data)),
-                              render_mode='canvas', text_font_size="7pt", text_align='center', text_color='#000000')
 
-            p.add_layout(labels)
 
-    # Add hover tool
-    p.add_tools(HoverTool(tooltips=[("Site", "$name"),
-                                    ("Average Daily Users", "@counts{int}")]))
 
-    # Stylize plot
-    style_plot(p)
 
-    # Add title and fix y_range
-    title_str = set_title_str(src_df['season'].values[0], src_df['dayOfWeek'].values[0])
-    p.add_layout(Title(text=title_str, text_font_size="13pt"), 'above')
-    p.y_range = Range1d(0, src_df['adu'].max() * 1.3)
-    if show_sensor_n:
-        p.add_layout(Title(text="Note: (*) is number of days with sensor data",
-                           text_font_size="10pt", text_font_style='normal'), 'below')
 
-    return p
